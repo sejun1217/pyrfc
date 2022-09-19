@@ -1,0 +1,35 @@
+FROM amazonlinux
+
+# components needed for pyrfc
+RUN yum update -y
+RUN yum install -y python3
+RUN yum install -y gcc-c++
+RUN yum install python3-devel -y
+RUN yum install unzip -y
+RUN yum install wget -y
+
+# install pip
+RUN pip3 install wheel
+RUN pip3 install Cython
+
+# install pyrfc
+WORKDIR /usr/local/sap/nwrfcsdk
+ADD nwrfcsdk/lib /usr/local/sap/nwrfcsdk/lib
+ADD nwrfcsdk/include /usr/local/sap/nwrfcsdk/include
+ENV SAPNWRFC_HOME=/usr/local/sap/nwrfcsdk
+ENV LD_LIBRARY_PATH=/usr/local/sap/nwrfcsdk/lib
+RUN pip3 install pyrfc
+
+# Create the wheel
+WORKDIR /root/
+RUN mkdir wheel_dir
+RUN pip3 wheel pyrfc -w wheel_dir
+
+# Merge SAP SDK files into PyRFC wheel file
+WORKDIR /root/wheel_dir
+RUN unzip pyrfc-2.5.0-cp37-cp37m-linux_x86_64.whl
+ADD nwrfcsdk/lib/* pyrfc/
+RUN wget https://download-ib01.fedoraproject.org/pub/epel/7/x86_64/Packages/p/patchelf-0.12-1.el7.x86_64.rpm
+RUN rpm -i patchelf-0.12-1.el7.x86_64.rpm
+RUN find -name '*.so' -exec patchelf --set-rpath '$ORIGIN' {} \;
+RUN zip -r pyrfc-2.5.0-cp37-cp37m-linux_x86_64.whl pyrfc pyrfc-2.5.0.dist-info
